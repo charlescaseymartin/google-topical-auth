@@ -3,9 +3,9 @@ import sys
 import json
 import requests
 import argparse
+import bs4 as BeautifulSoup
 from selenium import webdriver
-# from common.constants import REMOTE_WEBDRIVER
-# from common.utils import wait_for_selenium_to_start
+from selenium.webdriver.common.by import By
 
 prog = 'Google Topical Auth'
 description = 'Given target keywords, this program will generate a topic authority map'
@@ -74,7 +74,7 @@ def parse_args():
     }
 
 
-def expand_target_keywords(keywords: [str], keyword_file: str, output_file: str):
+def expand_keywords(keywords: [str], keyword_file: str, output_file: str):
     results = {}
     all_keywords = get_all_keywords(keywords, keywords_file)
 
@@ -84,10 +84,31 @@ def expand_target_keywords(keywords: [str], keyword_file: str, output_file: str)
         parsed_response = json.loads(response.text)[1]
         results[keyword] = parsed_response
 
-    results = json.dumps(results, indent=4)
-    print(f'keyword map: {results}')
-    # with open(output_file, 'w+') as output:
-    #     output.write(results)
+    return results
+
+
+class ChromeWrapper():
+    options = webdriver.ChromeOptions()
+
+    def __init__(self):
+        self.set_webdriver_options()
+
+    def set_webdriver_options(self):
+        self.options.add_argument('--no-sandbox')
+        self.options.add_argument('--headless')
+        self.options.add_argument('--disable-dev-shm-usage')
+        proxy = '000.000.000.000:0000'
+        self.options.add_argument(f'--proxy-server=http://{proxy}')
+
+    def get_proxy(self):
+        return 'test-proxy'
+
+    def scrape_top_results(self):
+        with webdriver.Chrome(options=self.options) as browser:
+            browser.get('https://ipinfo.io')
+            # soup = BeautifulSoup(browser.page_source, 'lxml')
+            # ip_item = browser.find_element(By.CSS_SELECTOR, 'li#ip-string')
+            print(f'page: {browser.page_source}')
 
 
 if __name__ == '__main__':
@@ -95,16 +116,6 @@ if __name__ == '__main__':
     keywords = args.get('keywords')
     keywords_file = args.get('keywords_file')
     output_file = args.get('output_file')
-    # expand_target_keywords(keywords, keywords_file, output_file)
-
-    ## selenium test ##
-    options = webdriver.ChromeOptions()
-    options.add_argument('--no-sandbox')
-    options.add_argument("--headless")
-    options.add_argument("--disable-dev-shm-usage")
-
-    with webdriver.Chrome(options=options) as browser:
-        browser.get('https://www.google.com')
-        print(f'page title: {browser.title}')
-
-    print('reached Google!')
+    # expand_keywords(keywords, keywords_file, output_file)
+    browser = ChromeWrapper()
+    browser.scrape_top_results()
