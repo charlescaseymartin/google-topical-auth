@@ -1,11 +1,12 @@
 import os
 import sys
 import json
+import random
 import requests
 import argparse
-import bs4 as BeautifulSoup
+# import bs4 as BeautifulSoup
 from selenium import webdriver
-from selenium.webdriver.common.by import By
+# from selenium.webdriver.common.by import By
 
 prog = 'Google Topical Auth'
 description = 'Given target keywords, this program will generate a topic authority map'
@@ -98,15 +99,21 @@ class ChromeWrapper():
         self.options.add_argument('--no-sandbox')
         self.options.add_argument('--headless')
         self.options.add_argument('--disable-dev-shm-usage')
-        proxy = 'http://20.235.159.154:80'
+        proxy = self.get_proxy()
         self.options.add_argument(f'--proxy-server={proxy}')
 
     def get_proxy(self):
-        return 'test-proxy'
+        all_proxies = []
+        proxies_path = os.path.join(data_path, 'proxies.json')
+
+        with open(proxies_path, 'r') as proxy_file:
+            all_proxies = json.loads(proxy_file.read())
+
+        return random.choice(all_proxies)
 
     def scrape_top_results(self):
         with webdriver.Chrome(options=self.options) as browser:
-            browser.get('https://ipinfo.io')
+            browser.get('https://www.google.com')
             # soup = BeautifulSoup(browser.page_source, 'lxml')
             # ip_item = browser.find_element(By.CSS_SELECTOR, 'li#ip-string')
             print(f'page: {browser.page_source}')
