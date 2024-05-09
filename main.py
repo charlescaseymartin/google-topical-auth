@@ -12,7 +12,8 @@ description = 'Given target keywords, this program will generate a topic authori
 key_help = 'A list of space separated target keywords to use'
 key_file_help = 'A text file of comma separated target keywords to use'
 out_file_help = 'A json file to store the results (default is ./data/output.json)'
-default_output_file = os.path.join(os.getcwd(), 'data/output.json')
+data_path = os.path.join(os.getcwd(), 'data')
+default_output_file = os.path.join(data_path, 'output.json')
 suggestions_url = 'https://www.google.com/complete/search?client=chrome&q='
 user_agent = 'Mozilla/5.0 (X11; Linux x86_64; rv:60.0) Gecko/20100101 Firefox/81.0'
 parser = argparse.ArgumentParser(prog=prog, description=description)
@@ -97,8 +98,8 @@ class ChromeWrapper():
         self.options.add_argument('--no-sandbox')
         self.options.add_argument('--headless')
         self.options.add_argument('--disable-dev-shm-usage')
-        proxy = '000.000.000.000:0000'
-        self.options.add_argument(f'--proxy-server=http://{proxy}')
+        proxy = 'http://20.235.159.154:80'
+        self.options.add_argument(f'--proxy-server={proxy}')
 
     def get_proxy(self):
         return 'test-proxy'
