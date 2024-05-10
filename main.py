@@ -1,7 +1,8 @@
 import os
 import sys
 import json
-import random
+from random import choice
+import urllib
 import requests
 import argparse
 # import bs4 as BeautifulSoup
@@ -91,6 +92,7 @@ def expand_keywords(keywords: [str], keyword_file: str, output_file: str):
 
 class ChromeWrapper():
     options = webdriver.ChromeOptions()
+    current_proxy = None
 
     def __init__(self):
         self.set_webdriver_options()
@@ -103,13 +105,34 @@ class ChromeWrapper():
         self.options.add_argument(f'--proxy-server={proxy}')
 
     def get_proxy(self):
+        proxy = None
         all_proxies = []
+        proxy_works = False
         proxies_path = os.path.join(data_path, 'proxies.json')
 
         with open(proxies_path, 'r') as proxy_file:
             all_proxies = json.loads(proxy_file.read())
 
-        return random.choice(all_proxies)
+        print(f'proxy works: {proxy_works}')
+        while not proxy_works:
+            proxy_works = True
+            print(f'proxy works after assignment: {proxy_works}')
+            proxy = choice(all_proxies)
+            if self.current_proxy != proxy:
+                try:
+                    protocol = proxy.split('//')[0][:-1]
+                    print(f'-------------\nproxy protocol: {protocol}')
+                    print(f'proxy: {proxy}')
+                    print(f'proxy works during check: {proxy_works}')
+                    # urllib.urlopen('', proxies={'http':})
+                except IOError:
+                    print('bad proxy\n-------------')
+                    print(f'proxy works after error: {proxy_works}')
+                else:
+                    print('good proxy\n-------------')
+                    print(f'proxy works after valid: {proxy_works}')
+                    break
+        return
 
     def scrape_top_results(self):
         with webdriver.Chrome(options=self.options) as browser:
@@ -126,4 +149,4 @@ if __name__ == '__main__':
     output_file = args.get('output_file')
     # expand_keywords(keywords, keywords_file, output_file)
     browser = ChromeWrapper()
-    browser.scrape_top_results()
+    browser.get_proxy()
