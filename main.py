@@ -1,11 +1,10 @@
 import os
 import sys
 import json
-from random import choice
-import urllib
+import random
 import requests
 import argparse
-# import bs4 as BeautifulSoup
+from bs4 import BeautifulSoup
 from selenium import webdriver
 # from selenium.webdriver.common.by import By
 
@@ -101,37 +100,54 @@ class ChromeWrapper():
         self.options.add_argument('--no-sandbox')
         self.options.add_argument('--headless')
         self.options.add_argument('--disable-dev-shm-usage')
-        proxy = self.get_proxy()
-        self.options.add_argument(f'--proxy-server={proxy}')
+        # proxy = self.get_proxy()
+        # self.options.add_argument(f'--proxy-server={proxy}')
 
     def get_proxy(self):
-        proxy = None
         all_proxies = []
         proxy_works = False
+        user_agent_tag = 'HTTP_USER_AGENT'
+        ip_tag = 'REMOTE_ADDR'
+        proxy_test_url = 'http://azenv.net/'
         proxies_path = os.path.join(data_path, 'proxies.json')
 
         with open(proxies_path, 'r') as proxy_file:
             all_proxies = json.loads(proxy_file.read())
 
-        print(f'proxy works: {proxy_works}')
-        while not proxy_works:
-            proxy_works = True
-            print(f'proxy works after assignment: {proxy_works}')
-            proxy = choice(all_proxies)
-            if self.current_proxy != proxy:
+        while proxy_works is False:
+            new_proxy = random.choice(all_proxies)
+            if self.current_proxy != new_proxy:
                 try:
-                    protocol = proxy.split('//')[0][:-1]
+                    protocol = new_proxy.split('//')[0][:-1]
+                    req_proxy = {protocol: new_proxy}
+                    headers = {'User-Agent': user_agent}
                     print(f'-------------\nproxy protocol: {protocol}')
-                    print(f'proxy: {proxy}')
-                    print(f'proxy works during check: {proxy_works}')
-                    # urllib.urlopen('', proxies={'http':})
-                except IOError:
-                    print('bad proxy\n-------------')
-                    print(f'proxy works after error: {proxy_works}')
-                else:
+                    print(f'proxy: {new_proxy}')
+                    response = requests.get(proxy_test_url,
+                                            headers=headers,
+                                            proxies=req_proxy,
+                                            timeout=10)
+                    content = BeautifulSoup(response.content, 'lxml')
+                    title = content.find('title').string
+                    connect_details = content.find('pre').string.split('\n')
+                    details_user_agent = ''
+                    details_ip = ''
+
+                    for detail in connect_details:
+                        if user_agent_tag in detail:
+                            details_user_agent = detail.split(' = ')[-1]
+                        if ip_tag in detail:
+                            details_ip = detail.split(' = ')[-1]
+
+                    print(f'response code: {response.status_code}')
+                    print(f'content title: {title}')
+                    print(f'connection details: {connect_details}')
+                    print(f'connection IP: {details_ip}')
+                    print(f'connection User-Agent: {details_user_agent}')
+                    proxy_works = True
                     print('good proxy\n-------------')
-                    print(f'proxy works after valid: {proxy_works}')
-                    break
+                except IOError:
+                    print('Connection Error')
         return
 
     def scrape_top_results(self):
