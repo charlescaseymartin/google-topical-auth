@@ -12,12 +12,13 @@ prog = 'Google Topical Auth'
 description = 'Given target keywords, this program will generate a topic authority map'
 key_help = 'A list of space separated target keywords to use'
 key_file_help = 'A text file of comma separated target keywords to use'
-out_file_help = 'A json file to store the results (default is ./data/output.json)'
+proxy_help = 'A text file path that contains a newline separated list of proxies.\nProxy format: <PROTOCOL>//:<USERNAME>:<PASSWORD>@<IP-ADDRESS>:<PORT>)'
 data_path = os.path.join(os.getcwd(), 'data')
 default_output_file = os.path.join(data_path, 'output.json')
 suggestions_url = 'https://www.google.com/complete/search?client=chrome&q='
-user_agent = 'Mozilla/5.0 (X11; Linux x86_64; rv:60.0) Gecko/20100101 Firefox/81.0'
+user_agent = 'Mozilla/23.0 (X11; Linux x86_64; rv:60.0) Gecko/20100101 Firefox/81.0'
 parser = argparse.ArgumentParser(prog=prog, description=description)
+
 parser.add_argument('-k',
                     '--keywords',
                     required=False,
@@ -30,11 +31,11 @@ parser.add_argument('-f',
                     nargs=1,
                     help=key_file_help)
 
-parser.add_argument('-o',
-                    '--output',
-                    required=False,
+parser.add_argument('-p',
+                    '--proxies',
+                    required=True,
                     nargs=1,
-                    help=out_file_help)
+                    help=proxy_help)
 
 
 def load_keyword_file(key_path: str):
@@ -63,16 +64,16 @@ def parse_args():
     args = parser.parse_args()
     keyword_args = args.keywords if isinstance(args.keywords, list) else []
     keyword_file_arg = args.filename[0] if args.filename else ''
-    output_file_arg = args.output[0] if args.output else default_output_file
+    proxies_arg = args.proxies[0] if args.proxies else ''
 
-    if len(keyword_args) < 1 and keyword_file_arg == '':
+    if len(keyword_args) < 1 or keyword_file_arg == '' or proxies_arg == '':
         parser.print_help()
         sys.exit(1)
 
     return {
         'keywords': keyword_args,
         'keywords_file': keyword_file_arg,
-        'output_file': os.path.join(os.getcwd(), f'{output_file_arg}'),
+        'proxies': os.path.join(os.getcwd(), f'{proxies_arg}'),
     }
 
 
@@ -93,26 +94,31 @@ class ChromeWrapper():
     options = webdriver.ChromeOptions()
     current_proxy = None
 
-    def __init__(self):
+    def __init__(self, proxies_file):
         self.set_webdriver_options()
+        self.proxies_file = proxies_file
 
     def set_webdriver_options(self):
-        self.options.add_argument('--no-sandbox')
         self.options.add_argument('--headless')
         self.options.add_argument('--disable-dev-shm-usage')
-        # proxy = self.get_proxy()
+        # self.options.add_argument('--no-sandbox')
+        # proxy = self.set_proxy()
         # self.options.add_argument(f'--proxy-server={proxy}')
 
-    def get_proxy(self):
-        all_proxies = []
+    def get_all_proxies(self):
+        proxies = []
+        with open(self.proxies_file, 'r') as file:
+            lines = file.readlines()
+            proxies = [proxy.strip() for proxy in lines]
+        return proxies
+
+
+    def set_proxy(self):
+        all_proxies = self.get_all_proxies()
         proxy_works = False
         user_agent_tag = 'HTTP_USER_AGENT'
         ip_tag = 'REMOTE_ADDR'
-        proxy_test_url = 'http://azenv.net/'
-        proxies_path = os.path.join(data_path, 'proxies.json')
-
-        with open(proxies_path, 'r') as proxy_file:
-            all_proxies = json.loads(proxy_file.read())
+        test_url = 'http://azenv.net/'
 
         while proxy_works is False:
             new_proxy = random.choice(all_proxies)
@@ -121,14 +127,12 @@ class ChromeWrapper():
                     protocol = new_proxy.split('//')[0][:-1]
                     req_proxy = {protocol: new_proxy}
                     headers = {'User-Agent': user_agent}
-                    print(f'-------------\nproxy protocol: {protocol}')
-                    print(f'proxy: {new_proxy}')
-                    response = requests.get(proxy_test_url,
+                    print(f'-------------\nproxy: {new_proxy}')
+                    response = requests.get(test_url,
                                             headers=headers,
                                             proxies=req_proxy,
                                             timeout=10)
                     content = BeautifulSoup(response.content, 'lxml')
-                    title = content.find('title').string
                     connect_details = content.find('pre').string.split('\n')
                     details_user_agent = ''
                     details_ip = ''
@@ -139,15 +143,12 @@ class ChromeWrapper():
                         if ip_tag in detail:
                             details_ip = detail.split(' = ')[-1]
 
-                    print(f'response code: {response.status_code}')
-                    print(f'content title: {title}')
-                    print(f'connection details: {connect_details}')
-                    print(f'connection IP: {details_ip}')
-                    print(f'connection User-Agent: {details_user_agent}')
+                    print(f'IP: {details_ip}')
+                    print(f'User-Agent: {details_user_agent}')
                     proxy_works = True
-                    print('good proxy\n-------------')
+                    print('-------------')
                 except IOError:
-                    print('Connection Error')
+                    print(f'Proxy Connection Error: {new_proxy}')
         return
 
     def scrape_top_results(self):
@@ -162,7 +163,8 @@ if __name__ == '__main__':
     args = parse_args()
     keywords = args.get('keywords')
     keywords_file = args.get('keywords_file')
-    output_file = args.get('output_file')
+    proxies_file = args.get('output_file')
     # expand_keywords(keywords, keywords_file, output_file)
-    browser = ChromeWrapper()
-    browser.get_proxy()
+    browser = ChromeWrapper(proxies_file=proxies_file)
+    browser.set_proxy()
+    print(f'browser current proxy: {browser.current_proxy}')
