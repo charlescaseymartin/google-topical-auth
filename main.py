@@ -17,22 +17,25 @@ data_path = os.path.join(os.getcwd(), 'data')
 default_output_file = os.path.join(data_path, 'output.json')
 suggestions_url = 'https://www.google.com/complete/search?client=chrome&q='
 user_agent = 'Mozilla/23.0 (X11; Linux x86_64; rv:60.0) Gecko/20100101 Firefox/81.0'
+keywords_key = 'keywords'
+keywords_file_key = 'filename'
+proxies_key = 'proxies'
 parser = argparse.ArgumentParser(prog=prog, description=description)
 
 parser.add_argument('-k',
-                    '--keywords',
+                    f'--{keywords_key}',
                     required=False,
                     nargs='*',
                     help=key_help)
 
 parser.add_argument('-f',
-                    '--filename',
+                    f'--{keywords_file_key}',
                     required=False,
                     nargs=1,
                     help=key_file_help)
 
 parser.add_argument('-p',
-                    '--proxies',
+                    f'--{proxies_key}',
                     required=True,
                     nargs=1,
                     help=proxy_help)
@@ -66,14 +69,14 @@ def parse_args():
     keyword_file_arg = args.filename[0] if args.filename else ''
     proxies_arg = args.proxies[0] if args.proxies else ''
 
-    if len(keyword_args) < 1 or keyword_file_arg == '' or proxies_arg == '':
+    if len(keyword_args) < 1 or keyword_file_arg == '' and proxies_arg == '':
         parser.print_help()
         sys.exit(1)
 
     return {
-        'keywords': keyword_args,
-        'keywords_file': keyword_file_arg,
-        'proxies': os.path.join(os.getcwd(), f'{proxies_arg}'),
+        keywords_key: keyword_args,
+        keywords_file_key: keyword_file_arg,
+        proxies_key: os.path.join(os.getcwd(), f'{proxies_arg}'),
     }
 
 
@@ -93,17 +96,18 @@ def expand_keywords(keywords: [str], keyword_file: str, output_file: str):
 class ChromeWrapper():
     options = webdriver.ChromeOptions()
     current_proxy = None
+    proxies_file = None
 
     def __init__(self, proxies_file):
-        self.set_webdriver_options()
         self.proxies_file = proxies_file
+        self.set_webdriver_options()
 
     def set_webdriver_options(self):
         self.options.add_argument('--headless')
-        self.options.add_argument('--disable-dev-shm-usage')
-        # self.options.add_argument('--no-sandbox')
-        # proxy = self.set_proxy()
-        # self.options.add_argument(f'--proxy-server={proxy}')
+        # self.options.add_argument('--disable-dev-shm-usage')
+        self.options.add_argument('--no-sandbox')
+        self.get_new_proxy()
+        self.options.add_argument(f'--proxy-server={self.current_proxy}')
 
     def get_all_proxies(self):
         proxies = []
@@ -112,13 +116,9 @@ class ChromeWrapper():
             proxies = [proxy.strip() for proxy in lines]
         return proxies
 
-
-    def set_proxy(self):
+    def get_new_proxy(self):
         all_proxies = self.get_all_proxies()
         proxy_works = False
-        user_agent_tag = 'HTTP_USER_AGENT'
-        ip_tag = 'REMOTE_ADDR'
-        test_url = 'http://azenv.net/'
 
         while proxy_works is False:
             new_proxy = random.choice(all_proxies)
@@ -127,44 +127,29 @@ class ChromeWrapper():
                     protocol = new_proxy.split('//')[0][:-1]
                     req_proxy = {protocol: new_proxy}
                     headers = {'User-Agent': user_agent}
-                    print(f'-------------\nproxy: {new_proxy}')
-                    response = requests.get(test_url,
-                                            headers=headers,
-                                            proxies=req_proxy,
-                                            timeout=10)
-                    content = BeautifulSoup(response.content, 'lxml')
-                    connect_details = content.find('pre').string.split('\n')
-                    details_user_agent = ''
-                    details_ip = ''
-
-                    for detail in connect_details:
-                        if user_agent_tag in detail:
-                            details_user_agent = detail.split(' = ')[-1]
-                        if ip_tag in detail:
-                            details_ip = detail.split(' = ')[-1]
-
-                    print(f'IP: {details_ip}')
-                    print(f'User-Agent: {details_user_agent}')
+                    requests.get('http://azenv.net/',
+                                 headers=headers,
+                                 proxies=req_proxy,
+                                 timeout=10)
                     proxy_works = True
-                    print('-------------')
+                    self.current_proxy = new_proxy
                 except IOError:
-                    print(f'Proxy Connection Error: {new_proxy}')
-        return
+                    print(f'Proxy Connection Error: {new_proxy}\n{IOError}')
 
     def scrape_top_results(self):
         with webdriver.Chrome(options=self.options) as browser:
-            browser.get('https://www.google.com')
+            browser.get('https://ipinfo.io/')
             # soup = BeautifulSoup(browser.page_source, 'lxml')
             # ip_item = browser.find_element(By.CSS_SELECTOR, 'li#ip-string')
             print(f'page: {browser.page_source}')
+            print(f'page url: {browser.current_url}')
 
 
 if __name__ == '__main__':
     args = parse_args()
-    keywords = args.get('keywords')
-    keywords_file = args.get('keywords_file')
-    proxies_file = args.get('output_file')
+    keywords = args.get(keywords_key)
+    keywords_file = args.get(keywords_file_key)
+    proxies_file = args.get(proxies_key)
     # expand_keywords(keywords, keywords_file, output_file)
     browser = ChromeWrapper(proxies_file=proxies_file)
-    browser.set_proxy()
-    print(f'browser current proxy: {browser.current_proxy}')
+    browser.scrape_top_results()

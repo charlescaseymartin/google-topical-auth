@@ -1,4 +1,4 @@
 services:
   scrapper:
     build: .
-    command: ["-k", "test"]
+    command: ["-k", "test", "-p", "data/proxies.txt"]
