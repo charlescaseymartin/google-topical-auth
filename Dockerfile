@@ -8,14 +8,18 @@ RUN echo "===> Installing system dependencies..." && \
     libnspr4 libnss3 lsb-release xdg-utils libxss1 libdbus-glib-1-2 libgbm1 \
     libu2f-udev curl unzip xvfb;
 
-RUN echo "===> Installing chromedriver..." && \
-    wget https://storage.googleapis.com/chrome-for-testing-public/124.0.6367.155/linux64/chromedriver-linux64.zip && \
-    unzip chromedriver-linux64.zip -d /usr/bin && \
-    mv /usr/bin/chromedriver-linux64/chromedriver /usr/bin/chromedriver && \
-    chmod +x /usr/bin/chromedriver && \
-    rm chromedriver-linux64.zip;
+RUN echo "===> Installing geckodriver..." && \
+    GECKODRIVER_SETUP=gecko-setup.tar.gz && \
+    GECKODRIVER_VERSION=$(curl -L https://github.com/mozilla/geckodriver/releases/latest | \
+    grep -m 1 /tag/v | \
+    egrep -o "v([0-9]+).([0-9]+).([0-9]+)") && \
+    curl -L https://github.com/mozilla/geckodriver/releases/download/$GECKODRIVER_VERSION/geckodriver-$GECKODRIVER_VERSION-linux64.tar.gz > \
+    $GECKODRIVER_SETUP && \
+    tar -zxf $GECKODRIVER_SETUP -C /usr/local/bin && \
+    chmod +x /usr/local/bin/geckodriver && \
+    rm -f $GECKODRIVER_SETUP;
 
-RUN echo "===> Installing google-chrome..." && \
+RUN echo "===> Installing firefox..." && \
     CHROME_SETUP=google-chrome.deb && \
     wget -O $CHROME_SETUP "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb" && \
     dpkg -i $CHROME_SETUP && \
