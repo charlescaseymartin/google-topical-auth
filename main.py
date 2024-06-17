@@ -6,13 +6,14 @@ import requests
 import argparse
 from bs4 import BeautifulSoup
 from selenium import webdriver
+from selenium.webdriver.common.proxy import Proxy, ProxyType
 # from selenium.webdriver.common.by import By
 
 prog = 'Google Topical Auth'
 description = 'Given target keywords, this program will generate a topic authority map'
 key_help = 'A list of space separated target keywords to use'
 key_file_help = 'A text file of comma separated target keywords to use'
-proxy_help = 'A text file path that contains a newline separated list of proxies.\nProxy format: <PROTOCOL>//:<USERNAME>:<PASSWORD>@<IP-ADDRESS>:<PORT>)'
+proxy_help = 'A text file path that contains a newline separated list of proxies.\nProxy format: <USERNAME>:<PASSWORD>@<IP-ADDRESS>:<PORT>'
 data_path = os.path.join(os.getcwd(), 'data')
 default_output_file = os.path.join(data_path, 'output.json')
 suggestions_url = 'https://www.google.com/complete/search?client=chrome&q='
@@ -93,21 +94,29 @@ def expand_keywords(keywords: [str], keyword_file: str, output_file: str):
     return results
 
 
-class ChromeWrapper():
-    options = webdriver.ChromeOptions()
-    current_proxy = None
+class BrowserWrapper():
+    options = webdriver.firefox.options.Options()
     proxies_file = None
+    proxy_string = None
+    webdriver_proxy = None
 
     def __init__(self, proxies_file):
         self.proxies_file = proxies_file
-        self.set_webdriver_options()
+        self.configure_browser()
 
-    def set_webdriver_options(self):
+    def configure_browser(self):
         self.options.add_argument('--headless')
         # self.options.add_argument('--disable-dev-shm-usage')
+        # self.options.add_argument(f'--proxy-server={self.proxy_string}')
+        # self.options.binary_location = r"C:\Program Files\Mozilla Firefox\firefox.exe"
         self.options.add_argument('--no-sandbox')
         self.get_new_proxy()
-        self.options.add_argument(f'--proxy-server={self.current_proxy}')
+
+        self.webdriver_proxy = Proxy({
+            'proxyType': ProxyType.MANUAL,
+            'httpProxy': self.proxy_string,
+            'sslProxy': self.proxy_string,
+        })
 
     def get_all_proxies(self):
         proxies = []
@@ -122,27 +131,28 @@ class ChromeWrapper():
 
         while proxy_works is False:
             new_proxy = random.choice(all_proxies)
-            if self.current_proxy != new_proxy:
+            if self.proxy_string != new_proxy:
                 try:
-                    protocol = new_proxy.split('//')[0][:-1]
-                    req_proxy = {protocol: new_proxy}
+                    # protocol = new_proxy.split('//')[0][:-1]
+                    req_proxy = {"http://": new_proxy}
                     headers = {'User-Agent': user_agent}
                     requests.get('http://azenv.net/',
                                  headers=headers,
                                  proxies=req_proxy,
                                  timeout=10)
                     proxy_works = True
-                    self.current_proxy = new_proxy
+                    self.proxy_string = new_proxy
                 except IOError:
                     print(f'Proxy Connection Error: {new_proxy}\n{IOError}')
 
     def scrape_top_results(self):
-        with webdriver.Chrome(options=self.options) as browser:
-            browser.get('https://ipinfo.io/')
+        with webdriver.Firefox(options=self.options, proxy=self.webdriver_proxy) as browser:
+            browser.get('http://azenv.net/')
             # soup = BeautifulSoup(browser.page_source, 'lxml')
             # ip_item = browser.find_element(By.CSS_SELECTOR, 'li#ip-string')
             print(f'page: {browser.page_source}')
             print(f'page url: {browser.current_url}')
+            print(f'current proxy: {self.proxy_string}')
 
 
 if __name__ == '__main__':
@@ -151,5 +161,5 @@ if __name__ == '__main__':
     keywords_file = args.get(keywords_file_key)
     proxies_file = args.get(proxies_key)
     # expand_keywords(keywords, keywords_file, output_file)
-    browser = ChromeWrapper(proxies_file=proxies_file)
+    browser = BrowserWrapper(proxies_file=proxies_file)
     browser.scrape_top_results()

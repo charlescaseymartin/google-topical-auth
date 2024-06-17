@@ -1,6 +1,7 @@
 FROM ubuntu:focal
 
 ARG DEBIAN_FRONTEND=noninteractive
+
 RUN echo "===> Installing system dependencies..." && \
     apt-get update && \
     apt-get install --no-install-recommends -y python3 python3-pip wget \
@@ -20,15 +21,15 @@ RUN echo "===> Installing geckodriver..." && \
     rm -f $GECKODRIVER_SETUP;
 
 RUN echo "===> Installing firefox..." && \
-    CHROME_SETUP=google-chrome.deb && \
-    wget -O $CHROME_SETUP "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb" && \
-    dpkg -i $CHROME_SETUP && \
-    apt-get install -y -f && \
-    rm $CHROME_SETUP;
+    FIREFOX_SETUP=firefox-setup.tar.bz2 && \
+    apt-get purge firefox && \
+    curl -L "https://download.mozilla.org/?product=firefox-latest&os=linux64" > $FIREFOX_SETUP && \
+    tar xjf $FIREFOX_SETUP -C /opt/ && \
+    ln -s /opt/firefox/firefox /usr/bin/firefox && \
+    rm -f $FIREFOX_SETUP;
 
 RUN echo "===> Remove build dependencies..." && \
     apt-get remove -y $BUILD_DEPS && rm -rf /var/lib/apt/lists/*;
-
 
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
