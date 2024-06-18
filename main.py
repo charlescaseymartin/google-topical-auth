@@ -5,8 +5,8 @@ import random
 import requests
 import argparse
 from bs4 import BeautifulSoup
-from selenium import webdriver
-from selenium.webdriver.common.proxy import Proxy, ProxyType
+from seleniumwire import webdriver
+from selenium.webdriver.firefox.options import Options as FirefoxOptions
 # from selenium.webdriver.common.by import By
 
 prog = 'Google Topical Auth'
@@ -95,28 +95,27 @@ def expand_keywords(keywords: [str], keyword_file: str, output_file: str):
 
 
 class BrowserWrapper():
-    options = webdriver.firefox.options.Options()
+    firefox_options = FirefoxOptions()
+    wire_options = {}
     proxies_file = None
     proxy_string = None
-    webdriver_proxy = None
 
     def __init__(self, proxies_file):
         self.proxies_file = proxies_file
         self.configure_browser()
 
     def configure_browser(self):
-        self.options.add_argument('--headless')
-        # self.options.add_argument('--disable-dev-shm-usage')
-        # self.options.add_argument(f'--proxy-server={self.proxy_string}')
-        # self.options.binary_location = r"C:\Program Files\Mozilla Firefox\firefox.exe"
-        self.options.add_argument('--no-sandbox')
+        self.firefox_options.add_argument('--headless')
+        # self.options.add_argument('--no-sandbox')
         self.get_new_proxy()
-
-        self.webdriver_proxy = Proxy({
-            'proxyType': ProxyType.MANUAL,
-            'httpProxy': self.proxy_string,
-            'sslProxy': self.proxy_string,
-        })
+        self.wire_options = {
+            'proxy': {
+                'http': f'http://{self.proxy_string}',
+                'https': f'https://{self.proxy_string}',
+                'socks': f'socks5h://{self.proxy_string}',
+                'no_proxy': 'localhost,127.0.0.1',
+            }
+        }
 
     def get_all_proxies(self):
         proxies = []
@@ -133,7 +132,6 @@ class BrowserWrapper():
             new_proxy = random.choice(all_proxies)
             if self.proxy_string != new_proxy:
                 try:
-                    # protocol = new_proxy.split('//')[0][:-1]
                     req_proxy = {"http://": new_proxy}
                     headers = {'User-Agent': user_agent}
                     requests.get('http://azenv.net/',
@@ -146,7 +144,9 @@ class BrowserWrapper():
                     print(f'Proxy Connection Error: {new_proxy}\n{IOError}')
 
     def scrape_top_results(self):
-        with webdriver.Firefox(options=self.options, proxy=self.webdriver_proxy) as browser:
+        with webdriver.Firefox(
+                options=self.firefox_options,
+                seleniumwire_options=self.wire_options) as browser:
             browser.get('http://azenv.net/')
             # soup = BeautifulSoup(browser.page_source, 'lxml')
             # ip_item = browser.find_element(By.CSS_SELECTOR, 'li#ip-string')

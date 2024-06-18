@@ -7,7 +7,7 @@ RUN echo "===> Installing system dependencies..." && \
     apt-get install --no-install-recommends -y python3 python3-pip wget \
     fonts-liberation libappindicator3-1 libasound2 libatk-bridge2.0-0 \
     libnspr4 libnss3 lsb-release xdg-utils libxss1 libdbus-glib-1-2 libgbm1 \
-    libu2f-udev curl unzip xvfb;
+    libu2f-udev curl unzip xvfb openssl;
 
 RUN echo "===> Installing geckodriver..." && \
     GECKODRIVER_SETUP=gecko-setup.tar.gz && \
