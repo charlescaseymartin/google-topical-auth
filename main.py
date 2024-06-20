@@ -106,7 +106,6 @@ class BrowserWrapper():
 
     def configure_browser(self):
         self.firefox_options.add_argument('--headless')
-        # self.options.add_argument('--no-sandbox')
         self.get_new_proxy()
         self.wire_options = {
             'proxy': {
@@ -132,14 +131,22 @@ class BrowserWrapper():
             new_proxy = random.choice(all_proxies)
             if self.proxy_string != new_proxy:
                 try:
-                    req_proxy = {"http://": new_proxy}
+                    req_proxy = {
+                        'http': f'http://{new_proxy}',
+                        'https': f'https://{new_proxy}',
+                        'socks': f'socks5h://{new_proxy}',
+                    }
                     headers = {'User-Agent': user_agent}
-                    requests.get('http://azenv.net/',
+                    res = requests.get('http://azenv.net/',
                                  headers=headers,
                                  proxies=req_proxy,
                                  timeout=10)
-                    proxy_works = True
-                    self.proxy_string = new_proxy
+                    # print(f'status_code: {res.status_code}')
+                    # print(f'content: {res.content}')
+                    if res.status_code != 502:
+                        proxy_works = True
+                        self.proxy_string = new_proxy
+                        print('Valid proxy selected.')
                 except IOError:
                     print(f'Proxy Connection Error: {new_proxy}\n{IOError}')
 
@@ -147,7 +154,8 @@ class BrowserWrapper():
         with webdriver.Firefox(
                 options=self.firefox_options,
                 seleniumwire_options=self.wire_options) as browser:
-            browser.get('http://azenv.net/')
+            print('Making test request.')
+            browser.get('http://www.google.com/search?q=test')
             # soup = BeautifulSoup(browser.page_source, 'lxml')
             # ip_item = browser.find_element(By.CSS_SELECTOR, 'li#ip-string')
             print(f'page: {browser.page_source}')
