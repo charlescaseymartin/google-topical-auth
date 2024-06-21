@@ -82,6 +82,7 @@ def parse_args():
 
 
 def expand_keywords(keywords: [str], keyword_file: str, output_file: str):
+    # Use proxy for keyword completetion requests
     results = {}
     all_keywords = get_all_keywords(keywords, keywords_file)
 
@@ -97,16 +98,50 @@ def expand_keywords(keywords: [str], keyword_file: str, output_file: str):
 class BrowserWrapper():
     firefox_options = FirefoxOptions()
     wire_options = {}
+    invalid_proxies = []
     proxies_file = None
     proxy_string = None
 
     def __init__(self, proxies_file):
         self.proxies_file = proxies_file
-        self.configure_browser()
-
-    def configure_browser(self):
         self.firefox_options.add_argument('--headless')
-        self.get_new_proxy()
+        self.set_new_proxy()
+
+    def parse_proxy_file(self):
+        proxies = []
+        with open(self.proxies_file, 'r') as file:
+            lines = file.readlines()
+            proxies = [proxy.strip() for proxy in lines]
+        return proxies
+
+    def get_valid_proxy(self, all_proxies: [str]):
+        proxy_works = False
+
+        while proxy_works is False:
+            new_proxy = random.choice(all_proxies)
+            if self.proxy_string != new_proxy and new_proxy not in self.invalid_proxies:
+                self.invalid_proxies.append(new_proxy)
+                try:
+                    req_proxy = {
+                        'http': f'http://{new_proxy}',
+                        'https': f'https://{new_proxy}',
+                        'socks': f'socks5h://{new_proxy}',
+                    }
+                    headers = {'User-Agent': user_agent}
+                    res = requests.get('http://azenv.net/',
+                                       headers=headers,
+                                       proxies=req_proxy,
+                                       timeout=10)
+                    if res.status_code != 502:
+                        proxy_works = True
+                        self.proxy_string = new_proxy
+                        print(f'Found valid proxy: {new_proxy}')
+                except IOError:
+                    proxy_works = False
+
+    def set_new_proxy(self):
+        all_proxies = self.parse_proxy_file()
+        self.get_valid_proxy(all_proxies=all_proxies)
         self.wire_options = {
             'proxy': {
                 'http': f'http://{self.proxy_string}',
@@ -116,51 +151,22 @@ class BrowserWrapper():
             }
         }
 
-    def get_all_proxies(self):
-        proxies = []
-        with open(self.proxies_file, 'r') as file:
-            lines = file.readlines()
-            proxies = [proxy.strip() for proxy in lines]
-        return proxies
-
-    def get_new_proxy(self):
-        all_proxies = self.get_all_proxies()
-        proxy_works = False
-
-        while proxy_works is False:
-            new_proxy = random.choice(all_proxies)
-            if self.proxy_string != new_proxy:
-                try:
-                    req_proxy = {
-                        'http': f'http://{new_proxy}',
-                        'https': f'https://{new_proxy}',
-                        'socks': f'socks5h://{new_proxy}',
-                    }
-                    headers = {'User-Agent': user_agent}
-                    res = requests.get('http://azenv.net/',
-                                 headers=headers,
-                                 proxies=req_proxy,
-                                 timeout=10)
-                    # print(f'status_code: {res.status_code}')
-                    # print(f'content: {res.content}')
-                    if res.status_code != 502:
-                        proxy_works = True
-                        self.proxy_string = new_proxy
-                        print('Valid proxy selected.')
-                except IOError:
-                    print(f'Proxy Connection Error: {new_proxy}\n{IOError}')
-
-    def scrape_top_results(self):
+    def get_google_keyword_results(self, keyword: str):
+        # THIS IS PROXY IP TEST WEB PAGE REQUEST
+        # Real google searches should check for capchas blocks.
+        # When blocked get new IP then recursively call this method
         with webdriver.Firefox(
                 options=self.firefox_options,
                 seleniumwire_options=self.wire_options) as browser:
-            print('Making test request.')
-            browser.get('http://www.google.com/search?q=test')
-            # soup = BeautifulSoup(browser.page_source, 'lxml')
-            # ip_item = browser.find_element(By.CSS_SELECTOR, 'li#ip-string')
+            browser.get('http://azenv.net/')
             print(f'page: {browser.page_source}')
             print(f'page url: {browser.current_url}')
             print(f'current proxy: {self.proxy_string}')
+
+    def get_keywords_results(self):
+        keywords = ['test1', 'test2', 'test3']
+        for keyword in keywords:
+            self.get_google_results(keyword)
 
 
 if __name__ == '__main__':
@@ -170,4 +176,4 @@ if __name__ == '__main__':
     proxies_file = args.get(proxies_key)
     # expand_keywords(keywords, keywords_file, output_file)
     browser = BrowserWrapper(proxies_file=proxies_file)
-    browser.scrape_top_results()
+    browser.get_keywords_results()
