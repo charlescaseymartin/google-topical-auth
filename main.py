@@ -4,7 +4,8 @@ import json
 import random
 import requests
 import argparse
-from bs4 import BeautifulSoup
+# from bs4 import BeautifulSoup
+import urllib3
 from seleniumwire import webdriver
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
 # from selenium.webdriver.common.by import By
@@ -15,12 +16,13 @@ key_help = 'A list of space separated target keywords to use'
 key_file_help = 'A text file of comma separated target keywords to use'
 proxy_help = 'A text file path that contains a newline separated list of proxies.\nProxy format: <USERNAME>:<PASSWORD>@<IP-ADDRESS>:<PORT>'
 data_path = os.path.join(os.getcwd(), 'data')
-default_output_file = os.path.join(data_path, 'output.json')
-suggestions_url = 'https://www.google.com/complete/search?client=chrome&q='
+default_output_file = os.path.join(data_path, 'results.json')
+suggestions_url = 'https://www.google.com/complete/search?client=firefox&q='
 user_agent = 'Mozilla/23.0 (X11; Linux x86_64; rv:60.0) Gecko/20100101 Firefox/81.0'
 keywords_key = 'keywords'
 keywords_file_key = 'filename'
 proxies_key = 'proxies'
+urllib3.disable_warnings()
 parser = argparse.ArgumentParser(prog=prog, description=description)
 
 parser.add_argument('-k',
@@ -64,6 +66,22 @@ def get_all_keywords(direct_keys: [str], key_file_dir: str):
     return keywords
 
 
+def write_results(results: dict):
+    json_data = json.dumps(results, indent=4)
+    print(f'JSON results: {json_data}')
+    print(f'output path: {default_output_file}')
+    with open(default_output_file, 'w') as result_file:
+        result_file.write(json_data)
+
+
+def read_results():
+    results = {}
+    with open(default_output_file, 'r') as result_file:
+        text_results = result_file.read()
+        results = json.loads(text_results)
+    return results
+
+
 def parse_args():
     args = parser.parse_args()
     keyword_args = args.keywords if isinstance(args.keywords, list) else []
@@ -81,75 +99,129 @@ def parse_args():
     }
 
 
-def expand_keywords(keywords: [str], keyword_file: str, output_file: str):
-    # Use proxy for keyword completetion requests
+def expand_keywords(keywords: [str], keyword_file: str, proxy: str):
     results = {}
     all_keywords = get_all_keywords(keywords, keywords_file)
+    headers = {'User-Agent': user_agent}
+    proxies = {
+        'http': f'socks5h://{proxy}',
+        'https': f'socks5h://{proxy}',
+    }
 
     for keyword in all_keywords:
         url = f'{suggestions_url}{keyword}'
-        response = requests.get(url, headers={'User-Agent': user_agent})
-        parsed_response = json.loads(response.text)[1]
-        results[keyword] = parsed_response
+        # url = 'http://azenv.net/'
+        try:
+            with requests.Session() as ses:
+                res = ses.get(url,
+                              headers=headers,
+                              proxies=proxies,
+                              allow_redirects=True,
+                              verify=False)
 
-    return results
+                print(f'[#] Suggestion HTML: {res.text}')
+                print(f'[#] Suggestion status code: {res.status_code}')
+                print(f'[#] Suggestion url: {res.url}')
+                print(f'[#] Suggestion history: {res.history}')
+
+                if res.status_code == 200:
+                    parsed_res = json.loads(res.text)[1]
+                    results[keyword] = parsed_res
+                    write_results(results)
+                else:
+                    print('[!] Unsuccesful response')
+                    return
+                # res = requests.get(url,
+                #                    headers=headers,
+                #                    proxies=proxies,
+                #                    #allow_redirects=False,
+                #                    verify=False)
+                # print(f'[#] Suggestion HTML: {res.text}')
+                # print(f'[#] Suggestion status code: {res.status_code}')
+                # print(f'[#] Suggestion url: {res.url}')
+                # print(f'[#] Suggestion history: {res.history}')
+                # if res.status_code == 200:
+                #     parsed_res = json.loads(res.text)[1]
+                #     results[keyword] = parsed_res
+
+
+        except IOError as ioerr:
+            print(f'Keyword Expansion IOError: {ioerr}')
+            return
+
+
+def parse_proxy_file(proxies_file):
+    proxies = []
+    with open(proxies_file, 'r') as file:
+        lines = file.readlines()
+        proxies = [proxy.strip() for proxy in lines]
+    return proxies
 
 
 class BrowserWrapper():
     firefox_options = FirefoxOptions()
     wire_options = {}
+    proxies = []
     invalid_proxies = []
-    proxies_file = None
     proxy_string = None
 
-    def __init__(self, proxies_file):
-        self.proxies_file = proxies_file
+    def __init__(self, proxies):
+        self.proxies = proxies
         self.firefox_options.add_argument('--headless')
         self.set_new_proxy()
 
-    def parse_proxy_file(self):
-        proxies = []
-        with open(self.proxies_file, 'r') as file:
-            lines = file.readlines()
-            proxies = [proxy.strip() for proxy in lines]
-        return proxies
-
-    def get_valid_proxy(self, all_proxies: [str]):
+    def get_valid_proxy(self):
         proxy_works = False
 
         while proxy_works is False:
-            new_proxy = random.choice(all_proxies)
+            no_proxies = len(self.proxies) < 1
+            if no_proxies and len(self.invalid_proxies) > 1:
+                print(f'[#] Invalid proxies: {self.invalid_proxies}')
+                raise Exception('[!] No valid proxies found.')
+            elif no_proxies:
+                raise Exception('[!] No proxies given for use.')
+
+            new_proxy = random.choice(self.proxies)
             if self.proxy_string != new_proxy and new_proxy not in self.invalid_proxies:
+                self.proxies.remove(new_proxy)
                 self.invalid_proxies.append(new_proxy)
+                print(f'[#] Trying {new_proxy}')
                 try:
                     req_proxy = {
-                        'http': f'http://{new_proxy}',
-                        'https': f'https://{new_proxy}',
-                        'socks': f'socks5h://{new_proxy}',
+                        'http': f'socks5h://{new_proxy}',
+                        'https': f'socks5h://{new_proxy}',
                     }
                     headers = {'User-Agent': user_agent}
                     res = requests.get('http://azenv.net/',
                                        headers=headers,
                                        proxies=req_proxy,
-                                       timeout=10)
-                    if res.status_code != 502:
+                                       timeout=5,
+                                       verify=False)
+                    # print(f'[#] IP test response: {res.text}')
+                    print(f'[#] IP test status code: {res.status_code}')
+                    if res.status_code == 200:
                         proxy_works = True
                         self.proxy_string = new_proxy
-                        print(f'Found valid proxy: {new_proxy}')
-                except IOError:
+                    else:
+                        proxy_works = False
+                except IOError as error:
                     proxy_works = False
+                    print(f'[#] IOError: {error}')
 
     def set_new_proxy(self):
-        all_proxies = self.parse_proxy_file()
-        self.get_valid_proxy(all_proxies=all_proxies)
-        self.wire_options = {
-            'proxy': {
-                'http': f'http://{self.proxy_string}',
-                'https': f'https://{self.proxy_string}',
-                'socks': f'socks5h://{self.proxy_string}',
-                'no_proxy': 'localhost,127.0.0.1',
+        print('[+] Selecting valid proxy...')
+        try:
+            self.get_valid_proxy()
+            self.wire_options = {
+                'proxy': {
+                    'http': f'socks5h://{self.proxy_string}',
+                    'https': f'socks5h://{self.proxy_string}',
+                }
             }
-        }
+            print(f'[+] Valid proxy selected {self.proxy_string}')
+        except Exception as error:
+            print(error)
+            sys.exit(1)
 
     def get_google_keyword_results(self, keyword: str):
         # THIS IS PROXY IP TEST WEB PAGE REQUEST
@@ -173,7 +245,10 @@ if __name__ == '__main__':
     args = parse_args()
     keywords = args.get(keywords_key)
     keywords_file = args.get(keywords_file_key)
-    proxies_file = args.get(proxies_key)
-    # expand_keywords(keywords, keywords_file, output_file)
-    browser = BrowserWrapper(proxies_file=proxies_file)
-    browser.get_keywords_results()
+    proxies = parse_proxy_file(args.get(proxies_key))
+    # proxies = ['13.40.239.130:1080']
+    print('[+] Loaded proxies.')
+    browser = BrowserWrapper(proxies=proxies)
+    print('[+] Initialized browser.')
+    expand_keywords(keywords, keywords_file, proxy=browser.proxy_string)
+    # browser.get_keywords_results()
