@@ -112,38 +112,24 @@ def expand_keywords(keywords: [str], keyword_file: str, proxy: str):
         url = f'{suggestions_url}{keyword}'
         # url = 'http://azenv.net/'
         try:
-            with requests.Session() as ses:
-                res = ses.get(url,
-                              headers=headers,
-                              proxies=proxies,
-                              allow_redirects=True,
-                              verify=False)
+            res = requests.get(url,
+                               headers=headers,
+                               proxies=proxies,
+                               allow_redirects=True,
+                               verify=False)
 
-                print(f'[#] Suggestion HTML: {res.text}')
-                print(f'[#] Suggestion status code: {res.status_code}')
-                print(f'[#] Suggestion url: {res.url}')
-                print(f'[#] Suggestion history: {res.history}')
+            print(f'[#] Suggestion HTML: {res.text}')
+            print(f'[#] Suggestion status code: {res.status_code}')
+            print(f'[#] Suggestion url: {res.url}')
+            print(f'[#] Suggestion history: {res.history}')
 
-                if res.status_code == 200:
-                    parsed_res = json.loads(res.text)[1]
-                    results[keyword] = parsed_res
-                    write_results(results)
-                else:
-                    print('[!] Unsuccesful response')
-                    return
-                # res = requests.get(url,
-                #                    headers=headers,
-                #                    proxies=proxies,
-                #                    #allow_redirects=False,
-                #                    verify=False)
-                # print(f'[#] Suggestion HTML: {res.text}')
-                # print(f'[#] Suggestion status code: {res.status_code}')
-                # print(f'[#] Suggestion url: {res.url}')
-                # print(f'[#] Suggestion history: {res.history}')
-                # if res.status_code == 200:
-                #     parsed_res = json.loads(res.text)[1]
-                #     results[keyword] = parsed_res
-
+            if res.status_code == 200:
+                parsed_res = json.loads(res.text)[1]
+                results[keyword] = parsed_res
+                write_results(results)
+            else:
+                print('[!] Unsuccesful response')
+                return
 
         except IOError as ioerr:
             print(f'Keyword Expansion IOError: {ioerr}')
