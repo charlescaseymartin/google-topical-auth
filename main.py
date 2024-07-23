@@ -44,6 +44,23 @@ parser.add_argument('-p',
                     help=proxy_help)
 
 
+def parse_args():
+    args = parser.parse_args()
+    keyword_args = args.keywords if isinstance(args.keywords, list) else []
+    keyword_file_arg = args.filename[0] if args.filename else ''
+    proxies_arg = args.proxies[0] if args.proxies else ''
+
+    if len(keyword_args) < 1 or keyword_file_arg == '' and proxies_arg == '':
+        parser.print_help()
+        sys.exit(1)
+
+    return {
+        keywords_key: keyword_args,
+        keywords_file_key: keyword_file_arg,
+        proxies_key: os.path.join(os.getcwd(), f'{proxies_arg}'),
+    }
+
+
 def load_keyword_file(key_path: str):
     keywords = []
     if len(key_path) < 1 and os.path.isfile(key_path) is False:
@@ -55,14 +72,6 @@ def load_keyword_file(key_path: str):
             keywords = [
                 keyword.strip() for row in lines for keyword in row if len(keyword) > 1
             ]
-    return keywords
-
-
-def get_all_keywords(direct_keys: [str], key_file_dir: str):
-    keywords = []
-    loaded_file_keywords = load_keyword_file(key_file_dir)
-    keywords.extend(direct_keys)
-    keywords.extend(loaded_file_keywords)
     return keywords
 
 
@@ -82,53 +91,25 @@ def read_results():
     return results
 
 
-def parse_args():
-    args = parser.parse_args()
-    keyword_args = args.keywords if isinstance(args.keywords, list) else []
-    keyword_file_arg = args.filename[0] if args.filename else ''
-    proxies_arg = args.proxies[0] if args.proxies else ''
-
-    if len(keyword_args) < 1 or keyword_file_arg == '' and proxies_arg == '':
-        parser.print_help()
-        sys.exit(1)
-
-    return {
-        keywords_key: keyword_args,
-        keywords_file_key: keyword_file_arg,
-        proxies_key: os.path.join(os.getcwd(), f'{proxies_arg}'),
-    }
-
-
-def expand_keywords(keywords: [str], keyword_file: str, proxy: str):
+def expand_keywords(keywords: [str], proxy: dict):
     results = {}
-    all_keywords = get_all_keywords(keywords, keywords_file)
     headers = {'User-Agent': user_agent}
-    proxies = {
-        'http': f'socks5h://{proxy}',
-        'https': f'socks5h://{proxy}',
-    }
 
-    for keyword in all_keywords:
+    for keyword in keywords:
         url = f'{suggestions_url}{keyword}'
-        # url = 'http://azenv.net/'
         try:
             res = requests.get(url,
                                headers=headers,
-                               proxies=proxies,
-                               allow_redirects=True,
+                               proxies=proxy,
+                               allow_redirects=False,
                                verify=False)
-
-            print(f'[#] Suggestion HTML: {res.text}')
-            print(f'[#] Suggestion status code: {res.status_code}')
-            print(f'[#] Suggestion url: {res.url}')
-            print(f'[#] Suggestion history: {res.history}')
 
             if res.status_code == 200:
                 parsed_res = json.loads(res.text)[1]
                 results[keyword] = parsed_res
                 write_results(results)
             else:
-                print('[!] Unsuccesful response')
+                print(f'[!] Results not found for: {keyword}')
                 return
 
         except IOError as ioerr:
@@ -140,64 +121,40 @@ def parse_proxy_file(proxies_file):
     proxies = []
     with open(proxies_file, 'r') as file:
         lines = file.readlines()
-        proxies = [proxy.strip() for proxy in lines]
+        for proxy in lines:
+            proxies.append({
+                'http': proxy,
+                'https': proxy,
+            })
     return proxies
+
+
+def get_proxy(current_proxy=dict, proxies=[dict]):
+    random_proxy = random.choice(proxies)
+
+    if len(current_proxy.keys()) < 1:
+        return random_proxy
+
+    while random_proxy['http'] == current_proxy['http']:
+        random_proxy = random.choice(proxies)
+
+    return random_proxy
 
 
 class BrowserWrapper():
     firefox_options = FirefoxOptions()
     wire_options = {}
     proxies = []
-    invalid_proxies = []
     proxy_string = None
 
-    def __init__(self, proxies):
-        self.proxies = proxies
+    def __init__(self):
         self.firefox_options.add_argument('--headless')
         self.set_new_proxy()
-
-    def get_valid_proxy(self):
-        proxy_works = False
-
-        while proxy_works is False:
-            no_proxies = len(self.proxies) < 1
-            if no_proxies and len(self.invalid_proxies) > 1:
-                print(f'[#] Invalid proxies: {self.invalid_proxies}')
-                raise Exception('[!] No valid proxies found.')
-            elif no_proxies:
-                raise Exception('[!] No proxies given for use.')
-
-            new_proxy = random.choice(self.proxies)
-            if self.proxy_string != new_proxy and new_proxy not in self.invalid_proxies:
-                self.proxies.remove(new_proxy)
-                self.invalid_proxies.append(new_proxy)
-                print(f'[#] Trying {new_proxy}')
-                try:
-                    req_proxy = {
-                        'http': f'socks5h://{new_proxy}',
-                        'https': f'socks5h://{new_proxy}',
-                    }
-                    headers = {'User-Agent': user_agent}
-                    res = requests.get('http://azenv.net/',
-                                       headers=headers,
-                                       proxies=req_proxy,
-                                       timeout=5,
-                                       verify=False)
-                    # print(f'[#] IP test response: {res.text}')
-                    print(f'[#] IP test status code: {res.status_code}')
-                    if res.status_code == 200:
-                        proxy_works = True
-                        self.proxy_string = new_proxy
-                    else:
-                        proxy_works = False
-                except IOError as error:
-                    proxy_works = False
-                    print(f'[#] IOError: {error}')
 
     def set_new_proxy(self):
         print('[+] Selecting valid proxy...')
         try:
-            self.get_valid_proxy()
+            self.get_proxy()
             self.wire_options = {
                 'proxy': {
                     'http': f'socks5h://{self.proxy_string}',
@@ -228,13 +185,17 @@ class BrowserWrapper():
 
 
 if __name__ == '__main__':
+    proxy = {}
+    keywords = []
     args = parse_args()
-    keywords = args.get(keywords_key)
     keywords_file = args.get(keywords_file_key)
+    keywords.extend(args.get(keywords_key))
+    keywords.extend(load_keyword_file(keywords_file))
+    print('[+] Loaded keywords.')
     proxies = parse_proxy_file(args.get(proxies_key))
-    # proxies = ['13.40.239.130:1080']
     print('[+] Loaded proxies.')
-    browser = BrowserWrapper(proxies=proxies)
-    print('[+] Initialized browser.')
-    expand_keywords(keywords, keywords_file, proxy=browser.proxy_string)
-    # browser.get_keywords_results()
+    proxy = get_proxy(proxy, proxies)
+    print('[+] Proxy selected.')
+    print('[+] Expanding initial keywords.')
+    expand_keywords(keywords, proxy=proxy)
+    # scrape key results page.
