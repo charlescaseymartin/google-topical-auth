@@ -14,11 +14,13 @@ prog = 'Google Topical Auth'
 description = 'Given target keywords, this program will generate a topic authority map'
 key_help = 'A list of space separated target keywords to use'
 key_file_help = 'A text file of comma separated target keywords to use'
-proxy_help = 'A text file path that contains a newline separated list of proxies.\nProxy format: <USERNAME>:<PASSWORD>@<IP-ADDRESS>:<PORT>'
+proxy_help = '''A text file path containing newline separated list of proxies.
+Proxy format: <USERNAME>:<PASSWORD>@<IP-ADDRESS>:<PORT>
+(Username and password is Optional just remove the @ sign)'''
 data_path = os.path.join(os.getcwd(), 'data')
 default_output_file = os.path.join(data_path, 'results.json')
-suggestions_url = 'https://www.google.com/complete/search?client=firefox&q='
-user_agent = 'Mozilla/23.0 (X11; Linux x86_64; rv:60.0) Gecko/20100101 Firefox/81.0'
+suggestions_url = 'http://suggestqueries.google.com/complete/search?output=firefox&q='
+user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0'
 keywords_key = 'keywords'
 keywords_file_key = 'filename'
 proxies_key = 'proxies'
@@ -77,8 +79,6 @@ def load_keyword_file(key_path: str):
 
 def write_results(results: dict):
     json_data = json.dumps(results, indent=4)
-    print(f'JSON results: {json_data}')
-    print(f'output path: {default_output_file}')
     with open(default_output_file, 'w') as result_file:
         result_file.write(json_data)
 
@@ -95,25 +95,28 @@ def expand_keywords(keywords: [str], proxy: dict):
     results = {}
     headers = {'User-Agent': user_agent}
 
+    print(f'user-agent: {headers}')
     for keyword in keywords:
-        url = f'{suggestions_url}{keyword}'
+        url = f'http://google.com/complete/search?client=chrome&q=minecraft is better than'
         try:
             res = requests.get(url,
                                headers=headers,
-                               proxies=proxy,
-                               allow_redirects=False,
+                               proxies={'http': 'socks4://18.133.16.21:1080', 'https': 'socks4://18.133.16.21:1080'},
+                               #allow_redirects=False,
                                verify=False)
 
             if res.status_code == 200:
-                parsed_res = json.loads(res.text)[1]
-                results[keyword] = parsed_res
-                write_results(results)
+                print(f'suggestion response: {res.text}')
+                #parsed_res = json.loads(res.text)[1]
+                #results[keyword] = parsed_res
+                #write_results(results)
             else:
                 print(f'[!] Results not found for: {keyword}')
+                print(f'response: {res.text}')
                 return
 
-        except IOError as ioerr:
-            print(f'Keyword Expansion IOError: {ioerr}')
+        except Exception as err:
+            print(f'Keyword Expansion Exception: {err}')
             return
 
 
@@ -122,9 +125,10 @@ def parse_proxy_file(proxies_file):
     with open(proxies_file, 'r') as file:
         lines = file.readlines()
         for proxy in lines:
+            parsed_proxy = proxy.strip()
             proxies.append({
-                'http': proxy,
-                'https': proxy,
+                'http': parsed_proxy,
+                'https': parsed_proxy,
             })
     return proxies
 
@@ -195,7 +199,7 @@ if __name__ == '__main__':
     proxies = parse_proxy_file(args.get(proxies_key))
     print('[+] Loaded proxies.')
     proxy = get_proxy(proxy, proxies)
-    print('[+] Proxy selected.')
+    print(f'[+] Proxy selected: {proxy}')
     print('[+] Expanding initial keywords.')
     expand_keywords(keywords, proxy=proxy)
     # scrape key results page.
