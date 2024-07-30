@@ -8,23 +8,31 @@ import argparse
 import urllib3
 from seleniumwire import webdriver
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
-# from selenium.webdriver.common.by import By
+from selenium.webdriver.support.wait import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
 
-prog = 'Google Topical Auth'
-description = 'Given target keywords, this program will generate a topic authority map'
-key_help = 'A list of space separated target keywords to use'
-key_file_help = 'A text file of comma separated target keywords to use'
-proxy_help = '''A text file path containing newline separated list of proxies.
-Proxy format: <USERNAME>:<PASSWORD>@<IP-ADDRESS>:<PORT>
-(Username and password is Optional just remove the @ sign)'''
+# Global Variables
 data_path = os.path.join(os.getcwd(), 'data')
 default_output_file = os.path.join(data_path, 'results.json')
 suggestions_url = 'http://suggestqueries.google.com/complete/search?output=firefox&q='
 user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0'
+proxy = {}
+proxies = []
+wire_options = {}
+driver_options = FirefoxOptions()
+driver_options.add_argument('--headless')
+
+# Argument Parser Variables
+prog = 'Google Topical Map'
+description = 'Given target keywords, this program will generate a Google topical map'
+key_help = 'A list of space separated target keywords to use'
+key_file_help = 'A text file of comma separated target keywords to use'
+proxy_help = '''A text file path containing newline separated list of proxies.
+Proxy format: <IP-ADDRESS>:<PORT>'''
 keywords_key = 'keywords'
 keywords_file_key = 'filename'
 proxies_key = 'proxies'
-urllib3.disable_warnings()
 parser = argparse.ArgumentParser(prog=prog, description=description)
 
 parser.add_argument('-k',
@@ -91,37 +99,21 @@ def read_results():
     return results
 
 
-def expand_keywords(keywords: [str], proxy: dict):
-    results = {}
-    headers = {'User-Agent': user_agent}
-
-    print(f'user-agent: {headers}')
-    for keyword in keywords:
-        url = f'http://google.com/complete/search?client=chrome&q=minecraft is better than'
-        try:
-            res = requests.get(url,
-                               headers=headers,
-                               proxies={'http': 'socks4://18.133.16.21:1080', 'https': 'socks4://18.133.16.21:1080'},
-                               #allow_redirects=False,
-                               verify=False)
-
-            if res.status_code == 200:
-                print(f'suggestion response: {res.text}')
-                #parsed_res = json.loads(res.text)[1]
-                #results[keyword] = parsed_res
-                #write_results(results)
-            else:
-                print(f'[!] Results not found for: {keyword}')
-                print(f'response: {res.text}')
-                return
-
-        except Exception as err:
-            print(f'Keyword Expansion Exception: {err}')
-            return
+def expand_keywords(keywords: [str]):
+    driver = webdriver.Firefox(options=driver_options,seleniumwire_options=wire_options)
+    try:
+        driver.get('https://www.google.com/')
+        #input = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "APjFqb")))
+        print(driver.page_source)
+        print('==> input is clickable.')
+    except TimeoutError:
+        print('[!] Hit timeout limit.')
+    finally:
+        driver.quit()
 
 
-def parse_proxy_file(proxies_file):
-    proxies = []
+def load_proxies(proxies_file: str):
+    global proxies
     with open(proxies_file, 'r') as file:
         lines = file.readlines()
         for proxy in lines:
@@ -130,19 +122,22 @@ def parse_proxy_file(proxies_file):
                 'http': parsed_proxy,
                 'https': parsed_proxy,
             })
-    return proxies
 
 
-def get_proxy(current_proxy=dict, proxies=[dict]):
+def set_proxy():
+    global proxy
+    global proxies
+    global wire_options
     random_proxy = random.choice(proxies)
-
-    if len(current_proxy.keys()) < 1:
-        return random_proxy
-
-    while random_proxy['http'] == current_proxy['http']:
+    if len(proxy.keys()) < 1:
+        proxy = random_proxy
+        wire_options = {'proxy': random_proxy}
+        return
+    while random_proxy['http'] == proxy['http']:
         random_proxy = random.choice(proxies)
-
-    return random_proxy
+    proxy = random_proxy
+    wire_options = {'proxy': random_proxy}
+    return
 
 
 class BrowserWrapper():
@@ -189,17 +184,17 @@ class BrowserWrapper():
 
 
 if __name__ == '__main__':
-    proxy = {}
+    urllib3.disable_warnings()
     keywords = []
     args = parse_args()
     keywords_file = args.get(keywords_file_key)
     keywords.extend(args.get(keywords_key))
     keywords.extend(load_keyword_file(keywords_file))
     print('[+] Loaded keywords.')
-    proxies = parse_proxy_file(args.get(proxies_key))
+    load_proxies(args.get(proxies_key))
     print('[+] Loaded proxies.')
-    proxy = get_proxy(proxy, proxies)
+    set_proxy()
     print(f'[+] Proxy selected: {proxy}')
-    print('[+] Expanding initial keywords.')
-    expand_keywords(keywords, proxy=proxy)
+    print('[+] Expanding keywords.')
+    expand_keywords(keywords)
     # scrape key results page.
