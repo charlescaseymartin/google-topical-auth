@@ -4,7 +4,7 @@ import json
 import random
 import requests
 import argparse
-# from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup
 import urllib3
 from seleniumwire import webdriver
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
@@ -15,7 +15,7 @@ from selenium.webdriver.common.by import By
 # Global Variables
 data_path = os.path.join(os.getcwd(), 'data')
 default_output_file = os.path.join(data_path, 'results.json')
-suggestions_url = 'http://suggestqueries.google.com/complete/search?output=firefox&q='
+bad_gateway_url = 'http://www.google.com/sorry/index'
 user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0'
 proxy = {}
 proxies = []
@@ -100,16 +100,41 @@ def read_results():
 
 
 def expand_keywords(keywords: [str]):
-    driver = webdriver.Firefox(options=driver_options,seleniumwire_options=wire_options)
-    try:
-        driver.get('https://www.google.com/')
-        #input = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "APjFqb")))
-        print(driver.page_source)
-        print('==> input is clickable.')
-    except TimeoutError:
-        print('[!] Hit timeout limit.')
-    finally:
-        driver.quit()
+    driver = webdriver.Firefox(
+        options=driver_options,
+        seleniumwire_options={'proxy': {'http': 'socks5h://3.9.71.167:3128', 'https': 'socks5h://3.9.71.167:3128'}})
+
+    with driver as browser:
+        try:
+            browser.get('http://www.google.com/')
+            print(f'===> url: {browser.current_url}')
+            print(browser.page_source)
+            body_count = len(browser.find_elements(By.CSS_SELECTOR, 'body > *'))
+            print(f'body_count: {body_count}')
+            # CATCH THIS !!!
+            # <title>502 Bad Gateway</title>
+            ####
+            # --- Todo: Make this a check a decorator ---
+            if body_count == 1 and 'Could not connect' in browser.find_element(By.CSS_SELECTOR, 'body h1').text:
+                print(browser.find_element(By.CSS_SELECTOR, 'body h1').text)
+                raise Exception('[!] Possible connection issue.')
+            elif body_count < 1:
+                print(browser.find_element(By.CSS_SELECTOR, 'body h1').text)
+                raise Exception('[!] Invalid Google page recieved.')
+            elif bad_gateway_url in browser.current_url:
+                raise Exception('[!] 502: Bad Gateway Recieved')
+            else:
+                search_bar = browser.find_element(By.ID, 'APjFqb')
+                for keyword in keywords:
+                    search_bar.clear()
+                    search_bar.send_keys(keyword)
+                    wait = WebDriverWait(browser, 5)
+                    suggests_css = 'div.lnnVSe div.wM6W7d.WggQGd span'
+                    suggestion_elems = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, suggests_css)))
+                    print(f'suggestion_elements: {suggestion_elems}')
+                    # [print(suggest_element.text) for suggest_element in suggestion_elements]
+        except Exception as error:
+            print(error)
 
 
 def load_proxies(proxies_file: str):
