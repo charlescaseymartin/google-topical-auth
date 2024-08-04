@@ -2,7 +2,7 @@ import os
 import sys
 import json
 import random
-import requests
+# import requests
 import argparse
 from bs4 import BeautifulSoup
 import urllib3
@@ -99,6 +99,26 @@ def read_results():
     return results
 
 
+def dns_leak_test():
+    driver = webdriver.Firefox(
+        options=driver_options,
+        seleniumwire_options=wire_options)
+
+    with driver as browser:
+        try:
+            browser.get('https://whatismyipaddress.com/')
+            print(f'===> url: {browser.current_url}')
+            print(browser.page_source)
+            #body_count = len(browser.find_elements(By.CSS_SELECTOR, 'body > *'))
+            #print(f'body_count: {body_count}')
+            #print(BeautifulSoup(browser.find_element(By.ID, 'ipv4'), 'lxml').prettify())
+            #wait = WebDriverWait(browser, 10)
+            #ip_elem = EC.presence_of_element_located((By.ID, 'ipv4'))
+            #wait.until(ip_elem)
+        except Exception as error:
+            print(error)
+
+
 def expand_keywords(keywords: [str]):
     driver = webdriver.Firefox(
         options=driver_options,
@@ -109,7 +129,8 @@ def expand_keywords(keywords: [str]):
             browser.get('http://www.google.com/')
             print(f'===> url: {browser.current_url}')
             print(browser.page_source)
-            body_count = len(browser.find_elements(By.CSS_SELECTOR, 'body > *'))
+            body_count = len(browser.find_elements(
+                By.CSS_SELECTOR, 'body > *'))
             print(f'body_count: {body_count}')
             # CATCH THIS !!!
             # <title>502 Bad Gateway</title>
@@ -130,7 +151,8 @@ def expand_keywords(keywords: [str]):
                     search_bar.send_keys(keyword)
                     wait = WebDriverWait(browser, 5)
                     suggests_css = 'div.lnnVSe div.wM6W7d.WggQGd span'
-                    suggestion_elems = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, suggests_css)))
+                    suggestion_elems = wait.until(
+                        EC.visibility_of_element_located((By.CSS_SELECTOR, suggests_css)))
                     print(f'suggestion_elements: {suggestion_elems}')
                     # [print(suggest_element.text) for suggest_element in suggestion_elements]
         except Exception as error:
@@ -221,5 +243,6 @@ if __name__ == '__main__':
     set_proxy()
     print(f'[+] Proxy selected: {proxy}')
     print('[+] Expanding keywords.')
-    expand_keywords(keywords)
+    #expand_keywords(keywords)
+    dns_leak_test()
     # scrape key results page.
