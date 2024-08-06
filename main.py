@@ -2,15 +2,17 @@ import os
 import sys
 import json
 import random
-# import requests
+import requests
 import argparse
-from bs4 import BeautifulSoup
+# from bs4 import BeautifulSoup
 import urllib3
 from seleniumwire import webdriver
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
+
+urllib3.disable_warnings()
 
 # Global Variables
 data_path = os.path.join(os.getcwd(), 'data')
@@ -100,15 +102,25 @@ def read_results():
 
 
 def dns_leak_test():
+    id_url = 'http://bash.ws/id'
+    headers = {
+        'User-Agent': user_agent,
+        'Accept-Language': 'en-US,en;q=0.5',
+    }
+    proxies = {'http': 'socks5h://3.71.239.218:3128', 'https': 'socks5h://3.71.239.218:3128'}
+
     driver = webdriver.Firefox(
         options=driver_options,
-        seleniumwire_options=wire_options)
+        seleniumwire_options={'proxy': proxies})
 
     with driver as browser:
         try:
-            browser.get('https://whatismyipaddress.com/')
-            print(f'===> url: {browser.current_url}')
+            browser.get('https://bash.ws/id')
             print(browser.page_source)
+            for request in browser.requests:
+                if request.response:
+                    res = request.response
+                    print(f'request: {request.url} : {res.status_code} : {res.headers}')
             #body_count = len(browser.find_elements(By.CSS_SELECTOR, 'body > *'))
             #print(f'body_count: {body_count}')
             #print(BeautifulSoup(browser.find_element(By.ID, 'ipv4'), 'lxml').prettify())
@@ -188,30 +200,6 @@ def set_proxy():
 
 
 class BrowserWrapper():
-    firefox_options = FirefoxOptions()
-    wire_options = {}
-    proxies = []
-    proxy_string = None
-
-    def __init__(self):
-        self.firefox_options.add_argument('--headless')
-        self.set_new_proxy()
-
-    def set_new_proxy(self):
-        print('[+] Selecting valid proxy...')
-        try:
-            self.get_proxy()
-            self.wire_options = {
-                'proxy': {
-                    'http': f'socks5h://{self.proxy_string}',
-                    'https': f'socks5h://{self.proxy_string}',
-                }
-            }
-            print(f'[+] Valid proxy selected {self.proxy_string}')
-        except Exception as error:
-            print(error)
-            sys.exit(1)
-
     def get_google_keyword_results(self, keyword: str):
         # THIS IS PROXY IP TEST WEB PAGE REQUEST
         # Real google searches should check for capchas blocks.
@@ -231,7 +219,6 @@ class BrowserWrapper():
 
 
 if __name__ == '__main__':
-    urllib3.disable_warnings()
     keywords = []
     args = parse_args()
     keywords_file = args.get(keywords_file_key)
@@ -243,6 +230,6 @@ if __name__ == '__main__':
     set_proxy()
     print(f'[+] Proxy selected: {proxy}')
     print('[+] Expanding keywords.')
-    #expand_keywords(keywords)
+    # expand_keywords(keywords)
     dns_leak_test()
     # scrape key results page.

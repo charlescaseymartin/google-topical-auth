@@ -2,8 +2,8 @@ services:
   scrapper:
     build: .
     command: ["-k", "test", "-p", "data/proxies.txt"]
-    # dns:
-    #   - 9.9.9.9
-    #   - 149.112.112.112
+    dns:
+      - 9.9.9.9
+      - 149.112.112.112
     volumes:
       - ./data:/usr/src/app/data
